@@ -75,7 +75,7 @@ async function run() {
   // 龙头加分
   filtered.forEach(s => {
     if (leaders.includes(s.code)) {
-      s.score += CONFIG.LEADER_BONUS
+      s.score = Number((s.score + CONFIG.LEADER_BONUS).toFixed(2))
     }
   })
 
@@ -87,7 +87,11 @@ async function run() {
     return b._turnoverDetail - a._turnoverDetail
   })
 
-  const top = filtered.slice(0, CONFIG.TOP_N)
+  // 过滤低于分数阈值的股票
+  const qualified = filtered.filter(s => s.score >= CONFIG.MIN_SCORE)
+  const top = qualified.slice(0, CONFIG.TOP_N)
+
+  console.log(`达标股票数量: ${qualified.length} (分数 >= ${CONFIG.MIN_SCORE})`)
 
   console.table(top.map(s => ({
     code: s.code,
@@ -100,6 +104,10 @@ async function run() {
     score: s.score
   })))
 
+  const outputDir = "./output"
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true })
+  }
   fs.writeFileSync(
     "./output/result.json",
     JSON.stringify(top, null, 2)

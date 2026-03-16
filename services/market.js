@@ -60,11 +60,23 @@ async function fetchSSEStocks() {
   const allStocks = []
   const batchSize = 700
 
-  // 上交所股票代码范围: 600000-689999
+  // 上交所主板股票代码范围
+  const codeRanges = [
+    { start: 600000, end: 600999 },
+    { start: 601000, end: 601999 },
+    { start: 603000, end: 603999 },
+    { start: 605000, end: 605999 },
+  ]
+
   const codes = []
-  for (let i = 600000; i <= 689999; i += 100) {
-    codes.push(`sh${i}`)
+  for (const range of codeRanges) {
+    for (let i = range.start; i <= range.end; i++) {
+      codes.push(`sh${i}`)
+    }
   }
+
+  const totalCodes = codes.length
+  let processedCodes = 0
 
   try {
     for (let i = 0; i < codes.length; i += batchSize) {
@@ -78,39 +90,18 @@ async function fetchSSEStocks() {
       })
 
       const stocks = parseTencentData(res.data, 'sh')
-      allStocks.push(...stocks)
+      allStocks.push(...stocks.filter(s => s.name && s.price > 0))
+
+      processedCodes += batch.length
 
       if (i + batchSize < codes.length) {
         await sleep(200)
       }
+
+      console.log(`已获取沪市股票 ${processedCodes}/${totalCodes}`)
     }
 
-    // 获取真实存在的股票详情
-    const realStocks = []
-    const detailBatchSize = 500
-    
-    for (let i = 0; i < allStocks.length; i += detailBatchSize) {
-      const batch = allStocks.slice(i, i + detailBatchSize)
-      const codes = batch.map(s => `sh${s.code}`).join(',')
-      const url = `http://qt.gtimg.cn/q=${codes}`
-
-      const res = await axios.get(url, {
-        timeout: 30000,
-        headers: { 'Referer': 'https://gu.qq.com/' },
-        responseType: 'arraybuffer'
-      })
-
-      const stocks = parseTencentData(res.data, 'sh')
-      realStocks.push(...stocks.filter(s => s.name && s.price > 0))
-
-      if (i + detailBatchSize < allStocks.length) {
-        await sleep(200)
-      }
-
-      console.log(`已获取沪市股票 ${Math.min(i + detailBatchSize, allStocks.length)}/${allStocks.length}`)
-    }
-
-    return realStocks
+    return allStocks
   } catch (err) {
     console.log('腾讯沪市API失败:', err.message)
     return allStocks

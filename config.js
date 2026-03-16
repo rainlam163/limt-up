@@ -1,6 +1,7 @@
 export const CONFIG = {
 
   TOP_N: 10,
+  MIN_SCORE: 5,  // 最低推送分数阈值，低于此分数不推送
 
   MIN_PRICE: 3,
   MAX_PRICE: 40,
