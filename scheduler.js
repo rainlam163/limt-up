@@ -16,7 +16,7 @@ function isWeekday(date) {
  * @param {Function} task - 要执行的任务函数
  * @param {string} cronExpression - cron表达式，默认周一至周五14:48
  */
-export function startScheduler(task, cronExpression = "00 37 22 * * 1-5") {
+export function startScheduler(task, cronExpression = "00 48 14 * * 1-5") {
   console.log("=== 定时任务调度器 ===")
   console.log(`执行时间: 周一至周五 14:48`)
   console.log(`Cron表达式: ${cronExpression}`)
