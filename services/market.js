@@ -36,6 +36,7 @@ function parseTencentData(buffer, prefix) {
     const volume = parseInt(fields[36]) || 0
     const amount = (parseFloat(fields[37]) || 0) * 10000 // 万转元
     const turnover = parseFloat(fields[38]) || 0  // 换手率
+    const ratio = parseFloat(fields[47]) || 0  // 量比
 
     if (price > 0 && name) {
       stocks.push({
@@ -46,7 +47,7 @@ function parseTencentData(buffer, prefix) {
         volume,
         amount,
         turnover,
-        ratio: 0,
+        ratio,  // 量比
         sector: getSectorByPct(pct)  // 根据涨幅确定板块
       })
     }
