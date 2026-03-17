@@ -12,6 +12,8 @@ import { calcSectorHot, getSectorDetail } from "./factors/sectorHot.js"
 import { calcTrend, getTrendDetail } from "./factors/trend.js"
 import { calcVolumePrice, getVolumePriceDetail } from "./factors/volumePrice.js"
 import { calcSentiment, calcMarketSentiment, getSentimentDesc } from "./factors/sentiment.js"
+import { calcStability, getStabilityDetail, isStableRising } from "./factors/stability.js"
+import { calcTrapDetect, getTrapDetail } from "./factors/trapDetect.js"
 
 import { calcScore } from "./utils/score.js"
 import { sendStockResult } from "./utils/push.js"
@@ -44,24 +46,33 @@ async function run() {
   const marketSentiment = calcMarketSentiment(stocks)
   console.log(`市场情绪: ${getSentimentDesc(marketSentiment)}`)
 
-  const filtered = stocks.filter(s =>
+  // 第一轮筛选：基础条件
+  const baseFiltered = stocks.filter(s =>
     isMainBoard(s.code) &&
     !isST(s.name) &&
-    s.pct >= 3 &&
-    s.pct < 9.5 &&
+    s.pct >= CONFIG.MIN_PCT &&
+    s.pct < CONFIG.MAX_PCT &&
     s.price > CONFIG.MIN_PRICE &&
     s.price < CONFIG.MAX_PRICE &&
     s.turnover > CONFIG.MIN_TURNOVER
   )
 
-  console.log("过滤后股票数量:", filtered.length)
+  console.log(`基础筛选后: ${baseFiltered.length} 只`)
+
+  // 第二轮筛选：稳定性过滤
+  const stableFiltered = baseFiltered.filter(s => isStableRising(s, CONFIG))
+  console.log(`稳定性过滤后: ${stableFiltered.length} 只`)
+
+  // 如果稳定性过滤后太少，放宽条件
+  const filtered = stableFiltered.length >= 5 ? stableFiltered : baseFiltered
+  console.log(`最终候选: ${filtered.length} 只`)
 
   // 获取K线数据（用于趋势和量价分析）
   console.log("获取K线数据...")
   const codes = filtered.map(s => s.code.startsWith('sh') || s.code.startsWith('sz') 
     ? s.code 
     : (s.code.startsWith('6') ? `sh${s.code}` : `sz${s.code}`))
-  const klineData = await fetchKlineBatch(codes, 5)  // 获取最近5天K线
+  const klineData = await fetchKlineBatch(codes, CONFIG.KLINE_DAYS)
 
   // 计算各因子评分
   for (const stock of filtered) {
@@ -79,6 +90,8 @@ async function run() {
     // 新增因子
     const trend = calcTrend(stock, kline)
     const volumePrice = calcVolumePrice(stock, kline)
+    const stability = calcStability(stock)
+    const trapScore = calcTrapDetect(stock, kline)
     const sentiment = calcSentiment(stock, marketSentiment)
 
     // 基础加权评分
@@ -88,41 +101,47 @@ async function run() {
       capital,
       trend,
       volumePrice,
+      stability,
       sector
     })
 
-    // 保存市场情绪加成（后续添加）
+    // 保存额外评分
+    stock._trapScore = trapScore
     stock._sentimentBonus = sentiment
 
-    // 保存详情用于排序
+    // 保存详情用于排序和调试
     stock._momentumDetail = getMomentumDetail(stock)
     stock._turnoverDetail = getTurnoverDetail(stock)
     stock._capitalDetail = getCapitalDetail(stock)
     stock._sectorDetail = getSectorDetail(stock)
     stock._trendDetail = getTrendDetail(stock, kline)
     stock._volumePriceDetail = getVolumePriceDetail(stock)
-
-    // 保存K线用于调试
+    stock._stabilityDetail = getStabilityDetail(stock)
+    stock._trapDetail = getTrapDetail(stock, kline)
     stock._kline = kline
   }
 
   // 识别龙头
   const leaders = detectLeaders(filtered)
 
-  // 龙头加分 + 市场情绪加成
+  // 计算最终评分
   filtered.forEach(s => {
     const leaderBonus = leaders.includes(s.code) ? CONFIG.LEADER_BONUS : 0
     const sentimentBonus = s._sentimentBonus || 0
-    s.score = Number((s.score + leaderBonus + sentimentBonus).toFixed(2))
+    const trapScore = s._trapScore || 0
+    
+    // 最终评分 = 基础分 + 诱多扣分 + 龙头加分 + 情绪加成
+    s.score = Number((s.score + trapScore + leaderBonus + sentimentBonus).toFixed(2))
     s._leaderBonus = leaderBonus
     s._sentimentBonus = sentimentBonus
+    s._trapScoreFinal = trapScore
   })
 
   // 多级排序
   filtered.sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score
     if (b._trendDetail !== a._trendDetail) return b._trendDetail - a._trendDetail
-    if (b._momentumDetail !== a._momentumDetail) return b._momentumDetail - a._momentumDetail
+    if (b._stabilityDetail !== a._stabilityDetail) return a._stabilityDetail - b._stabilityDetail  // 振幅小优先
     return b._capitalDetail - a._capitalDetail
   })
 
@@ -137,10 +156,10 @@ async function run() {
     name: s.name,
     price: s.price,
     pct: s.pct.toFixed(1) + '%',
+    amplitude: s.amplitude.toFixed(1) + '%',
     turnover: s.turnover.toFixed(1) + '%',
-    ratio: s.ratio.toFixed(2),
-    sector: s.sector,
-    score: s.score
+    score: s.score,
+    trap: s._trapScoreFinal
   })))
 
   const outputDir = "./output"
@@ -148,19 +167,29 @@ async function run() {
     fs.mkdirSync(outputDir, { recursive: true })
   }
 
-  // 保存完整结果（含市场情绪信息）
+  // 保存完整结果
   fs.writeFileSync(
     "./output/result.json",
     JSON.stringify({
+      timestamp: new Date().toISOString(),
       marketSentiment: {
         ...marketSentiment,
         desc: getSentimentDesc(marketSentiment)
+      },
+      filterStats: {
+        baseFiltered: baseFiltered.length,
+        stableFiltered: stableFiltered.length,
+        final: filtered.length,
+        qualified: qualified.length
       },
       stocks: top.map(s => ({
         code: s.code,
         name: s.name,
         price: s.price,
         pct: s.pct,
+        high: s.high,
+        low: s.low,
+        amplitude: s.amplitude,
         turnover: s.turnover,
         ratio: s.ratio,
         amount: s.amount,
@@ -169,7 +198,10 @@ async function run() {
         details: {
           leaderBonus: s._leaderBonus,
           sentimentBonus: s._sentimentBonus,
-          trendDays: s._trendDetail
+          trapScore: s._trapScoreFinal,
+          trapReasons: s._trapDetail?.reasons || '',
+          trendDays: s._trendDetail,
+          stability: s._stabilityDetail
         }
       }))
     }, null, 2)
@@ -177,15 +209,26 @@ async function run() {
 
   // 推送到微信
   console.log("\n推送到微信...")
-  await sendStockResult(top.map(s => ({
-    code: s.code,
-    name: s.name,
-    price: s.price,
-    pct: s.pct.toFixed(1),
-    turnover: s.turnover.toFixed(1),
-    amount: (s.amount / 1e8).toFixed(0) + '亿',
-    score: s.score
-  })))
+  await sendStockResult(
+    top.map(s => ({
+      code: s.code,
+      name: s.name,
+      price: s.price,
+      pct: s.pct.toFixed(1),
+      turnover: s.turnover.toFixed(1),
+      amount: (s.amount / 1e8).toFixed(0) + '亿',
+      score: s.score,
+      sector: s.sector,
+      trapReason: s._trapDetail?.reasons || '',
+      trendDays: s._trendDetail || 0,
+      amplitude: s.amplitude.toFixed(1),
+      ratio: s.ratio.toFixed(2)
+    })),
+    {
+      ...marketSentiment,
+      desc: getSentimentDesc(marketSentiment)
+    }
+  )
 
 }
 

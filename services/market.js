@@ -31,24 +31,34 @@ function parseTencentData(buffer, prefix) {
     if (fields.length < 40) continue
 
     const name = fields[1]
-    const price = parseFloat(fields[3]) || 0
+    const price = parseFloat(fields[3]) || 0        // 当前价
+    const prevClose = parseFloat(fields[4]) || 0    // 昨收
+    const high = parseFloat(fields[33]) || price    // 最高价
+    const low = parseFloat(fields[34]) || price     // 最低价
     const pct = parseFloat(fields[32]) || 0
     const volume = parseInt(fields[36]) || 0
     const amount = (parseFloat(fields[37]) || 0) * 10000 // 万转元
-    const turnover = parseFloat(fields[38]) || 0  // 换手率
-    const ratio = parseFloat(fields[47]) || 0  // 量比
+    const turnover = parseFloat(fields[38]) || 0    // 换手率
+    const ratio = parseFloat(fields[47]) || 0       // 量比
+
+    // 计算振幅
+    const amplitude = prevClose > 0 ? ((high - low) / prevClose) * 100 : 0
 
     if (price > 0 && name) {
       stocks.push({
         code,
         name,
         price,
+        prevClose,
+        high,
+        low,
         pct,
         volume,
         amount,
         turnover,
-        ratio,  // 量比
-        sector: getSectorByPct(pct)  // 根据涨幅确定板块
+        ratio,
+        amplitude,
+        sector: getSectorByPct(pct)
       })
     }
   }

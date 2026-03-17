@@ -1,10 +1,14 @@
 export const CONFIG = {
 
   TOP_N: 10,
-  MIN_SCORE: 4,  // 最低推送分数阈值（新因子体系调整后降低）
+  MIN_SCORE: 4,  // 最低推送分数阈值（新评分体系调整）
 
   MIN_PRICE: 3,
   MAX_PRICE: 40,
+
+  // 涨幅区间（收窄以提高稳定性）
+  MIN_PCT: 4,    // 最低涨幅
+  MAX_PCT: 8,    // 最高涨幅（排除涨停）
 
   MIN_TURNOVER: 2,
 
@@ -12,6 +16,11 @@ export const CONFIG = {
 
   // K线配置
   KLINE_DAYS: 5,  // 获取K线天数（用于趋势和量价分析）
+
+  // 稳定性阈值（适当放宽）
+  MAX_AMPLITUDE: 12,      // 最大振幅阈值（超过此值可能不稳定）
+  MAX_PULLBACK: 5,        // 最大回撤阈值（最高价与当前价差距）
+  MIN_STABILITY_SCORE: 1, // 最低稳定性分数
 
   // PushPlus推送配置
   // 获取token: 关注微信公众号"PushPlus推送"，回复"token"获取

@@ -111,9 +111,9 @@ export function calcSentiment(stock, marketSentiment) {
 export function getSentimentDesc(marketSentiment) {
   const { sentiment, limitUpCount, limitDownCount, upDownRatio } = marketSentiment
   
-  if (sentiment >= 3) return `极好 (${limitUpCount}涨停/${limitDownCount}跌停)`
-  if (sentiment >= 1.5) return `偏多 (${limitUpCount}涨停/${limitDownCount}跌停)`
-  if (sentiment >= 0) return `平稳 (${limitUpCount}涨停/${limitDownCount}跌停)`
-  if (sentiment >= -1.5) return `偏空 (${limitUpCount}涨停/${limitDownCount}跌停)`
-  return `极差 (${limitUpCount}涨停/${limitDownCount}跌停)`
+  if (sentiment >= 3) return `极好`
+  if (sentiment >= 1.5) return `偏多`
+  if (sentiment >= 0) return `平稳`
+  if (sentiment >= -1.5) return `偏空`
+  return `极差`
 }
