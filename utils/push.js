@@ -24,7 +24,8 @@ export async function pushToWechat(title, content, template = "html") {
       token,
       title,
       content,
-      template
+      template,
+      topic: CONFIG.PUSHPLUS_TOPIC
     }, {
       timeout: 10000,
       headers: { "Content-Type": "application/json" }
