@@ -1,7 +1,7 @@
 export const CONFIG = {
 
   TOP_N: 10,
-  MIN_SCORE: 4,  // 最低推送分数阈值（新评分体系调整）
+  MIN_SCORE: 2.0,  // 最低推送分数阈值（动态权重体系调整）
 
   MIN_PRICE: 3,
   MAX_PRICE: 40,
@@ -23,7 +23,6 @@ export const CONFIG = {
   MIN_STABILITY_SCORE: 1, // 最低稳定性分数
 
   // PushPlus推送配置
-  // 获取token: 关注微信公众号"PushPlus推送"，回复"token"获取
   PUSHPLUS_TOKEN: "3360b5133fba4b12a70bf8357ec6a9b6",  // 填入你的token
   
   // 推送开关

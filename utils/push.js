@@ -76,6 +76,7 @@ export function formatResultHtml(stocks, date, marketSentiment = null) {
     const isHot = pct >= 7
     const trapReason = s.trapReason || ''
     const sector = s.sector || ''
+    const sectorPct = s.sectorPct ? parseFloat(s.sectorPct) : 0
     const trendDays = s.trendDays || 0
     const amplitude = s.amplitude || 0
     const ratio = s.ratio || 0
@@ -85,6 +86,7 @@ export function formatResultHtml(stocks, date, marketSentiment = null) {
     if (trendDays >= 3) tags.push(`<span style="background:#dcfce7;color:#16a34a;font-size:9px;padding:1px 3px;border-radius:2px;height:18px;line-height:18px;">${trendDays}连涨</span>`)
     if (amplitude > 0 && amplitude < 6) tags.push(`<span style="background:#fef3c7;color:#d97706;font-size:9px;padding:1px 3px;border-radius:2px;height:18px;line-height:18px;">稳</span>`)
     if (ratio > 0 && ratio < 1.5) tags.push(`<span style="background:#dbeafe;color:#2563eb;font-size:9px;padding:1px 3px;border-radius:2px;height:18px;line-height:18px;">缩量</span>`)
+    if (sectorPct > 3) tags.push(`<span style="background:#fce7f3;color:#db2777;font-size:9px;padding:1px 3px;border-radius:2px;height:18px;line-height:18px;">板块+${sectorPct.toFixed(1)}%</span>`)
     
     return `
     <div style="margin-bottom:10px;border-radius:10px;padding:12px 14px;border:1px solid var(--border,#e5e7eb)">
@@ -114,6 +116,11 @@ export function formatResultHtml(stocks, date, marketSentiment = null) {
     </div>`
   }).join('')
 
+  // 动态权重说明
+  const weightHint = marketSentiment?.sentiment >= 1.5 ? '追涨优先' 
+    : marketSentiment?.sentiment >= 0 ? '均衡配置' 
+    : '保守为主'
+
   // 决策参考区块
   const decisionBlock = `
     <div style="margin-top:12px;padding:10px 12px;border-radius:8px;background:var(--card,#f9fafb);border:1px solid var(--border,#e5e7eb)">
@@ -122,7 +129,9 @@ export function formatResultHtml(stocks, date, marketSentiment = null) {
         • <b>连涨</b>: 连续上涨天数，越多趋势越强<br>
         • <b>稳</b>: 振幅小于6%，走势平稳<br>
         • <b>缩量</b>: 量比小于1.5，抛压较轻<br>
-        • <b>诱多</b>: 冲高回落等风险信号
+        • <b>板块</b>: 所属板块涨幅>3%为强势<br>
+        • <b>诱多</b>: 冲高回落等风险信号<br>
+        • 当前策略: <span style="color:#3b82f6">${weightHint}</span>
       </div>
     </div>`
 
