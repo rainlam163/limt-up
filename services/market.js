@@ -183,3 +183,22 @@ export async function fetchAllStocks() {
 
   return allStocks
 }
+
+/**
+ * 轻量级筛选（用于14:35预警，不获取K线）
+ * 只做基础筛选，不做深度分析
+ */
+export async function fetchStocksLightweight() {
+  console.log("正在获取市场数据(轻量级)...")
+  
+  // 并行获取沪深数据（复用已有函数）
+  const [shStocks, szStocks] = await Promise.all([
+    fetchSSEStocks(),
+    fetchSZStocks()
+  ])
+  
+  const stocks = [...shStocks, ...szStocks]
+  console.log(`成功获取 ${stocks.length} 只股票`)
+  
+  return stocks
+}

@@ -9,6 +9,60 @@ const STOCK_MAP_FILE = path.join(__dirname, "../output/stock_sector_map.json")
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
+// 东方财富行业名 -> 同花顺板块名 映射表
+const INDUSTRY_NAME_MAP = {
+  // 东方财富行业名: 同花顺板块名
+  '酿酒行业': '白酒',
+  '石油行业': '油气开采及服务',
+  '煤炭行业': '煤炭开采加工',
+  '煤炭采选': '煤炭开采加工',
+  '电力行业': '电力',
+  '钢铁行业': '钢铁',
+  '有色金属': '工业金属',
+  '化工行业': '化学制品',
+  '水泥行业': '水泥',
+  '房地产行业': '房地产开发',
+  '建筑装饰': '装修装饰',
+  '家电行业': '白色家电',
+  '汽车行业': '汽车整车',
+  '医药行业': '化学制药',
+  '中药行业': '中药',
+  '生物制品': '生物制品',
+  '医疗器械': '医疗器械',
+  '电子元件': '半导体',
+  '电子信息': '软件开发',
+  '软件服务': '软件开发',
+  '通信行业': '通信服务',
+  '传媒娱乐': '传媒',
+  '旅游酒店': '酒店及旅游',
+  '商业百货': '零售',
+  '纺织服装': '纺织制造',
+  '食品饮料': '食品加工',
+  '农药化肥': '农化制品',
+  '机械行业': '通用设备',
+  '仪器仪表': '仪器仪表',
+  '环保行业': '环保',
+  '环保工程': '环保',
+  '新能源电池': '电池',
+  '光伏行业': '光伏设备',
+  '风电行业': '风电设备',
+  '储能行业': '储能',
+  '航天军工': '国防军工',
+  '船舶制造': '航海装备',
+  '机场港口': '港口航运',
+  '高速公路': '高速公路',
+  '物流行业': '物流',
+  '交运物流': '物流',
+  '采掘行业': '油气开采及服务',
+  '采掘服务': '油气开采及服务',
+  '电源设备': '电池',
+  '塑胶制品': '塑料',
+  '计算机设备': '计算机设备',
+  '石油加工贸易': '石油加工贸易',
+  '燃气': '燃气',
+  '风电设备': '风电设备',
+}
+
 // 板块数据缓存
 let sectorCache = {
   timestamp: 0,
@@ -41,19 +95,15 @@ async function crawlSectorList() {
     const html = new TextDecoder('gbk').decode(res.data)
     const sectors = {}
     
-    // 提取板块信息：代码、名称、涨幅
-    // 表格行格式：<tr><td>1</td><td><a href=".../code/881107/">油气开采及服务</a></td><td>4.69</td>...</tr>
+    // 提取板块信息
     const trMatches = html.match(/<tr[^>]*>[\s\S]*?<\/tr>/g) || []
     
     for (const row of trMatches) {
       const tds = row.match(/<td[^>]*>([\s\S]*?)<\/td>/g) || []
       if (tds.length >= 3) {
-        // 第2列：板块链接，提取代码和名称
         const linkTd = tds[1] || ''
         const codeMatch = linkTd.match(/detail\/code\/(\d+)\//)
         const nameMatch = linkTd.match(/>([^<]+)<\/a>/)
-        
-        // 第3列：涨幅
         const pct = parseFloat(tds[2]?.replace(/<[^>]+>/g, '').trim()) || 0
         
         if (codeMatch && nameMatch) {
@@ -76,60 +126,67 @@ async function crawlSectorList() {
 }
 
 /**
- * 爬取单个板块的成分股
+ * 从东方财富获取单只股票的行业
  */
-async function crawlSectorStocks(sectorCode, sectorName) {
+async function fetchStockIndustry(code) {
   try {
-    const url = `https://q.10jqka.com.cn/thshy/detail/code/${sectorCode}/`
+    const prefix = code.startsWith('6') ? 'SH' : 'SZ'
+    const url = `http://emweb.eastmoney.com/PC_HSF10/CompanySurvey/CompanySurveyAjax?code=${prefix}${code}`
     
     const res = await axios.get(url, {
-      responseType: 'arraybuffer',
-      timeout: 10000,
       headers: { 
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0'
-      }
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0',
+        'Referer': 'http://emweb.eastmoney.com/'
+      },
+      timeout: 5000
     })
     
-    const html = new TextDecoder('gbk').decode(res.data)
-    
-    // 提取股票代码: href="http://stockpage.10jqka.com.cn/600258/"
-    const stockMatches = html.match(/stockpage\.10jqka\.com\.cn\/(\d{6})/g) || []
-    const codes = [...new Set(stockMatches.map(m => m.match(/\d{6}/)?.[0]).filter(Boolean))]
-    
-    return codes
-  } catch (err) {
-    return []
+    if (res.data?.jbzl?.sshy) {
+      return res.data.jbzl.sshy
+    }
+  } catch (e) {
+    // 忽略错误
   }
+  return null
 }
 
 /**
- * 批量爬取所有板块的成分股，建立股票-板块映射
+ * 批量获取股票行业（从东方财富）
+ * 只获取传入的候选股票的行业信息
  */
-async function buildStockSectorMap(sectors) {
-  console.log("[爬虫] 开始爬取板块成分股...")
+async function fetchStockIndustryBatch(codes) {
+  console.log(`[爬虫] 从东方财富获取 ${codes.length} 只股票行业...`)
   
-  const map = {}
-  const entries = Object.entries(sectors)
+  const results = {}
   let count = 0
   
-  for (const [sectorName, info] of entries) {
-    const codes = await crawlSectorStocks(info.code, sectorName)
+  for (const code of codes) {
+    // 移除前缀
+    const pureCode = code.replace(/^(sh|sz)/i, '')
     
-    for (const code of codes) {
-      map[code] = sectorName
+    // 跳过已有缓存的
+    if (stockSectorMap[pureCode]) {
+      results[pureCode] = stockSectorMap[pureCode]
+      continue
+    }
+    
+    const industry = await fetchStockIndustry(pureCode)
+    if (industry) {
+      results[pureCode] = industry
+      stockSectorMap[pureCode] = industry
     }
     
     count++
     if (count % 10 === 0) {
-      console.log(`[爬虫] 已处理 ${count}/${entries.length} 个板块`)
+      console.log(`[爬虫] 已获取 ${count}/${codes.length} 只股票行业`)
     }
     
-    // 避免请求过快
-    await sleep(100)
+    // 控制请求频率
+    await sleep(50)
   }
   
-  console.log(`[爬虫] 建立了 ${Object.keys(map).length} 个股票-板块映射`)
-  return map
+  console.log(`[爬虫] 获取到 ${Object.keys(results).length} 个股票行业`)
+  return results
 }
 
 /**
@@ -186,8 +243,8 @@ export async function fetchSectorRanking() {
       hotSectorAvgPct = sorted.reduce((sum, s) => sum + s.pct, 0) / sorted.length
     }
     
-    // 读取股票映射
-    const mapCache = loadCache(STOCK_MAP_FILE, 7 * 24 * 60 * 60 * 1000) // 映射缓存7天
+    // 读取股票映射缓存
+    const mapCache = loadCache(STOCK_MAP_FILE, 7 * 24 * 60 * 60 * 1000)
     if (mapCache && mapCache.data) {
       stockSectorMap = mapCache.data
     }
@@ -200,8 +257,6 @@ export async function fetchSectorRanking() {
   
   if (Object.keys(sectors).length > 0) {
     sectorCache = { timestamp: Date.now(), data: sectors }
-    
-    // 保存板块缓存
     saveCache({ timestamp: Date.now(), data: sectors }, CACHE_FILE)
     
     // 计算热门板块平均涨幅
@@ -213,10 +268,6 @@ export async function fetchSectorRanking() {
       hotSectorAvgPct = sorted.reduce((sum, s) => sum + s.pct, 0) / sorted.length
       console.log(`[爬虫] 热门板块平均涨幅: ${hotSectorAvgPct.toFixed(2)}%`)
     }
-    
-    // 爬取股票-板块映射（耗时操作，可以跳过或异步执行）
-    // stockSectorMap = await buildStockSectorMap(sectors)
-    // saveCache({ timestamp: Date.now(), data: stockSectorMap }, STOCK_MAP_FILE)
   }
 
   return sectorCache.data
@@ -230,18 +281,46 @@ export function getHotSectorAvgPct() {
 }
 
 /**
+ * 匹配板块名称（支持模糊匹配）
+ */
+function matchSectorName(industryName, sectorRanking) {
+  // 1. 精确匹配
+  if (sectorRanking[industryName]) {
+    return industryName
+  }
+  
+  // 2. 查映射表
+  if (INDUSTRY_NAME_MAP[industryName] && sectorRanking[INDUSTRY_NAME_MAP[industryName]]) {
+    return INDUSTRY_NAME_MAP[industryName]
+  }
+  
+  // 3. 模糊匹配（去除"行业"后缀）
+  const shortName = industryName.replace(/行业$/, '')
+  for (const sectorName of Object.keys(sectorRanking)) {
+    if (sectorName.includes(shortName) || shortName.includes(sectorName)) {
+      return sectorName
+    }
+  }
+  
+  return null
+}
+
+/**
  * 获取股票所属板块涨幅
- * @param {string} code 股票代码
- * @param {object} sectorRanking 板块数据
- * @param {object} _ 未使用
- * @returns {number} 板块涨幅，未匹配则返回热门板块平均涨幅
  */
 export function getStockSectorPct(code, sectorRanking, _) {
-  // 查找股票所属板块
-  const sectorName = stockSectorMap[code]
+  // 移除前缀
+  const pureCode = code.replace(/^(sh|sz)/i, '')
   
-  if (sectorName && sectorRanking[sectorName]) {
-    return sectorRanking[sectorName].pct
+  // 查找股票所属板块
+  const industryName = stockSectorMap[pureCode]
+  
+  if (industryName) {
+    // 匹配板块名称
+    const sectorName = matchSectorName(industryName, sectorRanking)
+    if (sectorName && sectorRanking[sectorName]) {
+      return sectorRanking[sectorName].pct
+    }
   }
   
   // 未匹配到板块，使用热门板块平均涨幅
@@ -249,29 +328,26 @@ export function getStockSectorPct(code, sectorRanking, _) {
 }
 
 /**
- * 批量获取股票所属板块（爬取成分股建立映射）
+ * 批量获取股票所属行业
+ * 从东方财富API获取，只获取候选股票
  */
 export async function fetchStockSectorsBatch(codes) {
-  // 如果已有映射缓存，直接返回
-  if (Object.keys(stockSectorMap).length > 0) {
-    return stockSectorMap
-  }
-  
-  // 尝试读取文件缓存
+  // 先读取缓存
   const mapCache = loadCache(STOCK_MAP_FILE, 7 * 24 * 60 * 60 * 1000)
   if (mapCache && mapCache.data) {
-    stockSectorMap = mapCache.data
-    console.log(`[爬虫] 从缓存读取 ${Object.keys(stockSectorMap).length} 个股票-板块映射`)
-    return stockSectorMap
+    stockSectorMap = { ...stockSectorMap, ...mapCache.data }
   }
   
-  // 没有缓存，需要爬取
-  if (Object.keys(sectorCache.data).length === 0) {
-    await fetchSectorRanking()
-  }
+  // 获取缺少行业信息的股票
+  const needFetch = codes.filter(code => {
+    const pureCode = code.replace(/^(sh|sz)/i, '')
+    return !stockSectorMap[pureCode]
+  })
   
-  if (Object.keys(sectorCache.data).length > 0) {
-    stockSectorMap = await buildStockSectorMap(sectorCache.data)
+  if (needFetch.length > 0) {
+    await fetchStockIndustryBatch(needFetch)
+    
+    // 保存映射缓存
     saveCache({ timestamp: Date.now(), data: stockSectorMap }, STOCK_MAP_FILE)
   }
   
