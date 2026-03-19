@@ -41,7 +41,7 @@ function isTurnoverTooHigh(turnover, pct) {
 }
 
 
-async function run() {
+async function run(isDev = false) {
 
   console.log("获取市场数据...")
   const stocks = await fetchAllStocks()
@@ -93,9 +93,14 @@ async function run() {
 
   // 获取板块数据（市场热度）
   console.log("获取板块数据...")
-  await fetchSectorRanking()
-  const sectorPct = getHotSectorAvgPct()  // 使用热门板块平均涨幅
-  console.log(`市场板块热度: ${sectorPct.toFixed(2)}%`)
+  const sectorRanking = await fetchSectorRanking()
+  const hotSectorPct = getHotSectorAvgPct()
+  console.log(`热门板块平均涨幅: ${hotSectorPct.toFixed(2)}%`)
+
+  // 爬取板块成分股，建立股票-板块映射
+  console.log("爬取板块成分股映射...")
+  const stockSectorMap = await fetchStockSectorsBatch(codes)
+  console.log(`股票-板块映射: ${Object.keys(stockSectorMap).length} 条`)
 
   // 获取动态权重
   const dynamicWeights = getDynamicWeights(marketSentiment.sentiment)
@@ -118,7 +123,11 @@ async function run() {
     const trapScore = calcTrapDetect(stock, kline)
     const sentimentBonus = calcSentiment(stock, marketSentiment)
 
-    // 使用市场热度
+    // 获取个股对应板块的真实涨幅
+    const stockCode = stock.code.startsWith('sh') || stock.code.startsWith('sz') 
+      ? stock.code.substring(2) 
+      : stock.code
+    const sectorPct = getStockSectorPct(stockCode, sectorRanking, stockSectorMap)
     const sectorScore = calcSectorHot({ pct: sectorPct })
 
     // 板块热度加成
@@ -257,7 +266,8 @@ async function run() {
     {
       ...marketSentiment,
       desc: getSentimentDesc(marketSentiment)
-    }
+    },
+    isDev
   )
 
 }
@@ -268,6 +278,8 @@ const mode = args[0] || 'now'
 
 if (mode === 'schedule') {
   startScheduler(run)
+} else if (mode === 'dev') {
+  run(true).catch(console.error)
 } else {
   run().catch(console.error)
 }

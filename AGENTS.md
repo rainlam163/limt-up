@@ -198,13 +198,13 @@ pm2 start index.js --name limitup -- schedule
 `config.js` 主要配置项：
 
 ```javascript
-TOP_N: 10             // 输出股票数量
-MIN_SCORE: 2.0        // 最低推送分数阈值（动态权重体系）
+TOP_N: 5             // 输出股票数量
+MIN_SCORE: 5.0        // 最低推送分数阈值（动态权重体系）
 MIN_PRICE: 3          // 最低价格
 MAX_PRICE: 40         // 最高价格
 MIN_PCT: 4            // 最低涨幅
 MAX_PCT: 8            // 最高涨幅（动态调整）
-MIN_TURNOVER: 2       // 最低换手率
+MIN_TURNOVER: 3       // 最低换手率
 KLINE_DAYS: 5         // K线天数（趋势分析）
 MAX_AMPLITUDE: 12     // 最大振幅阈值
 MAX_PULLBACK: 5       // 最大回撤阈值

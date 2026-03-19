@@ -1,18 +1,19 @@
 export const CONFIG = {
 
-  TOP_N: 10,
-  MIN_SCORE: 2.0,  // 最低推送分数阈值（动态权重体系调整）
+  TOP_N: 5,
+  MIN_SCORE: 5.0,  // 最低推送分数阈值（动态权重体系调整）
 
+  // 3-40元的股票更适合短线操作，过高可能不够活跃，过低可能不稳定，A股散户偏好价格区间
   MIN_PRICE: 3,
   MAX_PRICE: 40,
 
   // 涨幅区间（收窄以提高稳定性）
   MIN_PCT: 4,    // 最低涨幅
-  MAX_PCT: 8,    // 最高涨幅（排除涨停）
+  MAX_PCT: 8,    // 最高涨幅（过高避免接力）
 
-  MIN_TURNOVER: 2,
+  MIN_TURNOVER: 3, // 最小换手率（过低可能不活跃）
 
-  LEADER_BONUS: 2,
+  LEADER_BONUS: 2, // 龙头加分
 
   // K线配置
   KLINE_DAYS: 5,  // 获取K线天数（用于趋势和量价分析）

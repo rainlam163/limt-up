@@ -4,7 +4,7 @@ import { CONFIG } from "../config.js"
 /**
  * 推送消息到微信（通过PushPlus）
  */
-export async function pushToWechat(title, content, template = "html") {
+export async function pushToWechat(title, content, template = "html", isDev = false) {
   const token = CONFIG.PUSHPLUS_TOKEN
   
   if (!token) {
@@ -25,7 +25,7 @@ export async function pushToWechat(title, content, template = "html") {
       title,
       content,
       template,
-      topic: CONFIG.PUSHPLUS_TOPIC
+      topic: isDev ? undefined : CONFIG.PUSHPLUS_TOPIC
     }, {
       timeout: 10000,
       headers: { "Content-Type": "application/json" }
@@ -164,7 +164,7 @@ export function formatResultHtml(stocks, date, marketSentiment = null) {
 /**
  * 发送选股结果到微信
  */
-export async function sendStockResult(stocks, marketSentiment = null) {
+export async function sendStockResult(stocks, marketSentiment = null, isDev = false) {
   const date = new Date().toLocaleDateString("zh-CN", {
     month: "2-digit",
     day: "2-digit",
@@ -175,5 +175,5 @@ export async function sendStockResult(stocks, marketSentiment = null) {
   const title = `📊 LimitUp 隔夜策略`
   const content = formatResultHtml(stocks, date, marketSentiment)
   
-  return await pushToWechat(title, content, "html")
+  return await pushToWechat(title, content, "html", isDev)
 }

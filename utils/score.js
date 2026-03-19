@@ -3,8 +3,6 @@
  * 支持根据市场情绪动态调整因子权重
  */
 
-import { CONFIG } from "../config.js"
-
 // 基础权重配置
 const BASE_WEIGHTS = {
   trend: 0.30,        // 趋势延续

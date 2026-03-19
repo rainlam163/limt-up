@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "dev": "node index.js dev",
     "start": "node index.js",
     "schedule": "node index.js schedule",
     "publish": "rsync -avz --progress factors services strategy utils config.js index.js package.json scheduler.js root@110.41.168.87:/app/limit-up/"
